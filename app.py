@@ -1,97 +1,67 @@
-import streamlit as st
-import openai
 import os
+import streamlit as st
+from openai import OpenAI
 
-# Load API key from Streamlit secrets
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+# Load API key securely (must be set in Streamlit Cloud -> Settings -> Secrets)
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# Initialize OpenAI client
-client = openai.OpenAI(api_key=openai.api_key)
+st.set_page_config(page_title="Career Guider App", layout="wide")
 
+st.title("💼 Career Guider App")
 
-# --- Function to analyze resume ---
-def analyze_resume(resume_text):
-    prompt = f"""
-    You are a career guidance expert.
-    Analyze the following resume and provide:
-    1. Key strengths
-    2. Possible weaknesses
-    3. Best-fit career paths
-    4. Skills to improve
-    Resume: {resume_text}
-    """
+st.write("Upload your resume and job description to get AI-powered career guidance.")
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",   # lightweight, fast model
-        messages=[
-            {"role": "system", "content": "You are a professional career counselor."},
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=600
-    )
-    return response.choices[0].message.content
+# File uploader for resume
+uploaded_resume = st.file_uploader("Upload your Resume (PDF/DOCX)", type=["pdf", "docx"], key="resume_uploader")
 
+# Resume text input (alternative to upload)
+resume_text = st.text_area("Or paste your resume text here:", key="resume_input")
 
-# --- Chatbot function ---
-def career_chatbot(question, resume_text):
-    prompt = f"""
-    Resume: {resume_text}
+# File uploader for job description
+uploaded_job = st.file_uploader("Upload Job Description (PDF/DOCX)", type=["pdf", "docx"], key="job_uploader")
 
-    Question: {question}
+# Job description text input
+job_description = st.text_area("Or paste the job description here:", key="job_input")
 
-    Answer as a helpful career counselor with clear reasoning.
-    """
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a career guidance assistant."},
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=300
-    )
-    return response.choices[0].message.content
-
-
-# --- Streamlit UI ---
-st.set_page_config(page_title="Career Guider App", page_icon="🎯", layout="wide")
-st.title("🎯 Career Guider App")
-
-st.write("Upload your resume or paste text to get personalized career guidance.")
-
-# File upload
-uploaded_file = st.file_uploader("Upload your resume (.txt format)", type=["txt"])
-
-resume_text = ""
-if uploaded_file is not None:
-    resume_text = uploaded_file.read().decode("utf-8")
-elif st.text_area("Or paste your resume text here:"):
-    resume_text = st.session_state.get("resume_text", "")
-    resume_text = st.text_area("Or paste your resume text here:")
-
-# Analyze button
-if st.button("Analyze Resume"):
-    if resume_text.strip():
-        with st.spinner("Analyzing your resume..."):
-            result = analyze_resume(resume_text)
-        st.subheader("📊 Resume Analysis")
-        st.write(result)
+# Submit button
+if st.button("🔍 Analyze Match", key="analyze_button"):
+    if not resume_text and not uploaded_resume:
+        st.error("⚠️ Please provide a resume (upload or paste).")
+    elif not job_description and not uploaded_job:
+        st.error("⚠️ Please provide a job description (upload or paste).")
     else:
-        st.warning("Please upload or paste your resume first!")
+        with st.spinner("Analyzing your resume... ⏳"):
+            # Combine input sources
+            final_resume = resume_text if resume_text else "Uploaded resume file"
+            final_job = job_description if job_description else "Uploaded job file"
 
-# Chatbot section
-st.subheader("💬 Career Chatbot")
-user_question = st.text_input("Ask a career-related question:")
+            prompt = f"""
+            You are an expert career consultant.
+            Compare the following resume and job description.
+            Provide:
+            1. Match percentage
+            2. Key missing skills
+            3. Suggestions to improve the resume for this role
 
-if st.button("Ask"):
-    if resume_text.strip() and user_question.strip():
-        with st.spinner("Thinking..."):
-            answer = career_chatbot(user_question, resume_text)
-        st.write("**Answer:**")
-        st.write(answer)
-    elif not resume_text.strip():
-        st.warning("Upload or paste your resume first!")
-    else:
-        st.warning("Please enter a question.")
+            Resume:
+            {final_resume}
 
+            Job Description:
+            {final_job}
+            """
 
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are a helpful career advisor."},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+
+                result = response.choices[0].message.content
+                st.success("✅ Analysis Complete!")
+                st.write(result)
+
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
