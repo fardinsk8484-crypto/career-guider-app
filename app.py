@@ -1,8 +1,13 @@
 import streamlit as st
 import openai
+import os
 
-# Initialize OpenAI client (make sure OPENAI_API_KEY is set in Streamlit secrets or env variable)
-client = openai.OpenAI()
+# Load API key from Streamlit secrets
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+# Initialize OpenAI client
+client = openai.OpenAI(api_key=openai.api_key)
+
 
 # --- Function to analyze resume ---
 def analyze_resume(resume_text):
