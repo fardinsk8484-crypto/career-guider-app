@@ -63,4 +63,40 @@ else:
 # -------------------------------
 # Analyze
 # -------------------------------
-if st.button("🔍 Analyze M
+if st.button("🔍 Analyze Match", key="analyze_button"):
+    if not resume_text:
+        st.error("⚠️ Please provide a resume (upload or paste).")
+    elif not job_description:
+        st.error("⚠️ Please provide a job description (upload or paste).")
+    else:
+        with st.spinner("Analyzing your resume... ⏳"):
+            prompt = f"""
+            You are an expert career consultant.
+            Compare the following resume and job description.
+            Provide:
+            1. Match percentage
+            2. Key missing skills
+            3. Suggestions to improve the resume for this role
+
+            Resume:
+            {resume_text}
+
+            Job Description:
+            {job_description}
+            """
+
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are a helpful career advisor."},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+
+                result = response.choices[0].message.content
+                st.success("✅ Analysis Complete!")
+                st.write(result)
+
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
