@@ -1,58 +1,92 @@
 import streamlit as st
-import PyPDF2
-import docx
-import os
-from openai import OpenAI
+import openai
 
-# Initialize OpenAI client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Initialize OpenAI client (make sure OPENAI_API_KEY is set in Streamlit secrets or env variable)
+client = openai.OpenAI()
 
-st.set_page_config(page_title="AI Career Guider", page_icon="🎯", layout="wide")
-
-st.title("🎯 AI Career Guider")
-st.write("Upload your resume and get personalized career guidance with detailed explanations.")
-
-# --- Function to extract text from PDF ---
-def extract_text_from_pdf(uploaded_file):
-    pdf_reader = PyPDF2.PdfReader(uploaded_file)
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text() + "\n"
-    return text
-
-# --- Function to extract text from DOCX ---
-def extract_text_from_docx(uploaded_file):
-    doc = docx.Document(uploaded_file)
-    text = "\n".join([para.text for para in doc.paragraphs])
-    return text
-
-# --- Analyze Resume using GPT ---
+# --- Function to analyze resume ---
 def analyze_resume(resume_text):
     prompt = f"""
-    You are a professional career counselor.
-    The following is a resume text:
-
-    {resume_text}
-
-    Based on this, suggest the top 5 most suitable career options.
-    Rank them in order (best first).
-    For each career option, provide:
-    - Job Title
-    - Why this is a good fit
-    - Skills from resume that support this
-    - Possible growth opportunities
+    You are a career guidance expert.
+    Analyze the following resume and provide:
+    1. Key strengths
+    2. Possible weaknesses
+    3. Best-fit career paths
+    4. Skills to improve
+    Resume: {resume_text}
     """
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",   # Lightweight but good for reasoning
+        model="gpt-4o-mini",   # lightweight, fast model
         messages=[
-            {"role": "system", "content": "You are an expert career advisor."},
+            {"role": "system", "content": "You are a professional career counselor."},
             {"role": "user", "content": prompt}
         ],
         max_tokens=600
     )
     return response.choices[0].message.content
 
+
 # --- Chatbot function ---
-def care
+def career_chatbot(question, resume_text):
+    prompt = f"""
+    Resume: {resume_text}
+
+    Question: {question}
+
+    Answer as a helpful career counselor with clear reasoning.
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a career guidance assistant."},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=300
+    )
+    return response.choices[0].message.content
+
+
+# --- Streamlit UI ---
+st.set_page_config(page_title="Career Guider App", page_icon="🎯", layout="wide")
+st.title("🎯 Career Guider App")
+
+st.write("Upload your resume or paste text to get personalized career guidance.")
+
+# File upload
+uploaded_file = st.file_uploader("Upload your resume (.txt format)", type=["txt"])
+
+resume_text = ""
+if uploaded_file is not None:
+    resume_text = uploaded_file.read().decode("utf-8")
+elif st.text_area("Or paste your resume text here:"):
+    resume_text = st.session_state.get("resume_text", "")
+    resume_text = st.text_area("Or paste your resume text here:")
+
+# Analyze button
+if st.button("Analyze Resume"):
+    if resume_text.strip():
+        with st.spinner("Analyzing your resume..."):
+            result = analyze_resume(resume_text)
+        st.subheader("📊 Resume Analysis")
+        st.write(result)
+    else:
+        st.warning("Please upload or paste your resume first!")
+
+# Chatbot section
+st.subheader("💬 Career Chatbot")
+user_question = st.text_input("Ask a career-related question:")
+
+if st.button("Ask"):
+    if resume_text.strip() and user_question.strip():
+        with st.spinner("Thinking..."):
+            answer = career_chatbot(user_question, resume_text)
+        st.write("**Answer:**")
+        st.write(answer)
+    elif not resume_text.strip():
+        st.warning("Upload or paste your resume first!")
+    else:
+        st.warning("Please enter a question.")
+
 
