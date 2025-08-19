@@ -1,11 +1,11 @@
 import streamlit as st
 import PyPDF2
 import docx
-import openai
 import os
+from openai import OpenAI
 
-# Set your OpenAI API key from environment variable (better than hardcoding)
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 st.set_page_config(page_title="AI Career Guider", page_icon="🎯", layout="wide")
 
@@ -43,51 +43,16 @@ def analyze_resume(resume_text):
     - Possible growth opportunities
     """
 
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-4o-mini",   # Lightweight but good for reasoning
-        messages=[{"role": "system", "content": "You are an expert career advisor."},
-                  {"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": "You are an expert career advisor."},
+            {"role": "user", "content": prompt}
+        ],
         max_tokens=600
     )
-    return response["choices"][0]["message"]["content"]
+    return response.choices[0].message.content
 
 # --- Chatbot function ---
-def career_chatbot(question, resume_text):
-    prompt = f"""
-    Resume: {resume_text}
+def care
 
-    Question: {question}
-
-    Answer as a helpful career counselor with clear reasoning.
-    """
-
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "system", "content": "You are a career guidance assistant."},
-                  {"role": "user", "content": prompt}],
-        max_tokens=300
-    )
-    return response["choices"][0]["message"]["content"]
-
-# --- File Upload ---
-uploaded_file = st.file_uploader("📂 Upload your Resume (PDF or DOCX)", type=["pdf", "docx"])
-
-if uploaded_file:
-    if uploaded_file.type == "application/pdf":
-        resume_text = extract_text_from_pdf(uploaded_file)
-    else:
-        resume_text = extract_text_from_docx(uploaded_file)
-
-    st.success("✅ Resume uploaded successfully!")
-    st.subheader("📊 Career Guidance Results")
-    result = analyze_resume(resume_text)
-    st.write(result)
-
-    # Chatbot Section
-    st.subheader("💬 Ask Career Questions")
-    user_question = st.text_input("Enter your question:")
-    if st.button("Ask"):
-        if user_question.strip():
-            answer = career_chatbot(user_question, resume_text)
-            st.write("### 🤖 Career Bot says:")
-            st.write(answer)
