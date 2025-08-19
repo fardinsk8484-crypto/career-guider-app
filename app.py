@@ -1,102 +1,82 @@
-import os
 import streamlit as st
-from openai import OpenAI
-import docx
+import google.generativeai as genai
+import os
 from PyPDF2 import PdfReader
+import docx
 
-# Load API key securely
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# ========== SETUP ==========
+# Get your Gemini API key from https://aistudio.google.com/app/apikey
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-st.set_page_config(page_title="Career Guider App", layout="wide")
+model = genai.GenerativeModel("gemini-1.5-flash")
 
+# ========== HELPERS ==========
+def extract_text_from_pdf(file):
+    pdf = PdfReader(file)
+    text = ""
+    for page in pdf.pages:
+        text += page.extract_text() or ""
+    return text
+
+def extract_text_from_docx(file):
+    doc = docx.Document(file)
+    return "\n".join([p.text for p in doc.paragraphs])
+
+def get_text_from_file(uploaded_file):
+    if uploaded_file.name.endswith(".pdf"):
+        return extract_text_from_pdf(uploaded_file)
+    elif uploaded_file.name.endswith(".docx"):
+        return extract_text_from_docx(uploaded_file)
+    else:
+        return ""
+
+def analyze_resume(resume_text, job_text):
+    prompt = f"""
+    You are a career guidance assistant. Compare the following resume with the job description
+    and provide insights:
+    1. Key strengths of the resume
+    2. Missing skills/keywords
+    3. Suggestions to improve alignment
+    4. Final match score (0–100)
+
+    Resume:
+    {resume_text}
+
+    Job Description:
+    {job_text}
+    """
+    response = model.generate_content(prompt)
+    return response.text
+
+# ========== UI ==========
+st.set_page_config(page_title="Career Guider App", layout="centered")
 st.title("💼 Career Guider App")
 st.write("Upload your resume and job description to get AI-powered career guidance.")
 
-# -------------------------------
-# Helper functions
-# -------------------------------
-def read_docx(file):
-    doc = docx.Document(file)
-    return "\n".join([para.text for para in doc.paragraphs])
-
-def read_pdf(file):
-    pdf_reader = PdfReader(file)
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text() + "\n"
-    return text
-
-# -------------------------------
-# Resume Input
-# -------------------------------
-st.subheader("Resume Input")
-resume_option = st.radio("Choose input method:", ["Upload File", "Paste Text"], key="resume_option")
-
+# Resume input
+resume_file = st.file_uploader("Upload your Resume (PDF/DOCX)", type=["pdf", "docx"])
 resume_text = ""
-if resume_option == "Upload File":
-    uploaded_resume = st.file_uploader("Upload Resume (PDF/DOCX)", type=["pdf", "docx"], key="resume_uploader")
-    if uploaded_resume:
-        if uploaded_resume.type == "application/pdf":
-            resume_text = read_pdf(uploaded_resume)
-        elif uploaded_resume.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            resume_text = read_docx(uploaded_resume)
-else:
-    resume_text = st.text_area("Paste your resume text here:", key="resume_input")
+if resume_file:
+    resume_text = get_text_from_file(resume_file)
 
-# -------------------------------
-# Job Description Input
-# -------------------------------
-st.subheader("Job Description Input")
-job_option = st.radio("Choose input method:", ["Upload File", "Paste Text"], key="job_option")
+if not resume_text:
+    resume_text = st.text_area("Or paste your resume text here:")
 
-job_description = ""
-if job_option == "Upload File":
-    uploaded_job = st.file_uploader("Upload Job Description (PDF/DOCX)", type=["pdf", "docx"], key="job_uploader")
-    if uploaded_job:
-        if uploaded_job.type == "application/pdf":
-            job_description = read_pdf(uploaded_job)
-        elif uploaded_job.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            job_description = read_docx(uploaded_job)
-else:
-    job_description = st.text_area("Paste the job description here:", key="job_input")
+# Job description input
+job_file = st.file_uploader("Upload Job Description (PDF/DOCX)", type=["pdf", "docx"])
+job_text = ""
+if job_file:
+    job_text = get_text_from_file(job_file)
 
-# -------------------------------
-# Analyze
-# -------------------------------
-if st.button("🔍 Analyze Match", key="analyze_button"):
-    if not resume_text:
-        st.error("⚠️ Please provide a resume (upload or paste).")
-    elif not job_description:
-        st.error("⚠️ Please provide a job description (upload or paste).")
+if not job_text:
+    job_text = st.text_area("Or paste the job description here:")
+
+# Analyze button
+if st.button("🔍 Analyze Match"):
+    if resume_text and job_text:
+        with st.spinner("Analyzing..."):
+            result = analyze_resume(resume_text, job_text)
+        st.subheader("📊 Career Guidance Report")
+        st.write(result)
     else:
-        with st.spinner("Analyzing your resume... ⏳"):
-            prompt = f"""
-            You are an expert career consultant.
-            Compare the following resume and job description.
-            Provide:
-            1. Match percentage
-            2. Key missing skills
-            3. Suggestions to improve the resume for this role
-
-            Resume:
-            {resume_text}
-
-            Job Description:
-            {job_description}
-            """
-
-            try:
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "You are a helpful career advisor."},
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-
-                result = response.choices[0].message.content
-                st.success("✅ Analysis Complete!")
-                st.write(result)
-
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
+        st.error("Please provide both resume and job description.")
